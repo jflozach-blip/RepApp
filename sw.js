@@ -1,45 +1,38 @@
-const CACHE_NAME = 'pwa-mobile-1783258007770';
+const CACHE_NAME = 'union-rep-app-v3-5-8-fixed-2';
 
 const PRECACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './version.json',
-  './offline.html',
-  './install.js',
-  './icons/icon-72.png',
-  './icons/icon-96.png',
-  './icons/icon-128.png',
-  './icons/icon-144.png',
-  './icons/icon-152.png',
-  './icons/icon-180.png',
-  './icons/icon-192.png',
-  './icons/icon-384.png',
-  './icons/icon-512.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/version.json',
+  '/offline.html',
+  '/install.js',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
 ];
 
-// Install
 self.addEventListener('install', event => {
   self.skipWaiting();
 
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
+      for (const url of PRECACHE) {
+        try {
+          const response = await fetch(url, { cache: 'reload' });
 
-      const results = await Promise.allSettled(
-        PRECACHE.map(url => cache.add(url))
-      );
-
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.warn('Failed to cache:', PRECACHE[index]);
+          if (response.ok) {
+            await cache.put(url, response);
+          } else {
+            console.warn('Not cached:', url, response.status);
+          }
+        } catch (err) {
+          console.warn('Cache failed:', url, err);
         }
-      });
-
+      }
     })
   );
 });
 
-// Activate
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -54,40 +47,23 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch
 self.addEventListener('fetch', event => {
-
-  if (event.request.method !== 'GET') {
-    return;
-  }
+  if (event.request.method !== 'GET') return;
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-
-        // Don't cache bad responses
-        if (!response || response.status !== 200) {
-          return response;
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, copy).catch(() => {});
+          });
         }
-
-        const copy = response.clone();
-
-        caches.open(CACHE_NAME)
-          .then(cache => cache.put(event.request, copy))
-          .catch(() => {});
-
         return response;
       })
       .catch(async () => {
-
         const cached = await caches.match(event.request);
-
-        if (cached) {
-          return cached;
-        }
-
-        return caches.match('./offline.html');
+        return cached || caches.match('/offline.html');
       })
   );
-
 });
